@@ -64,7 +64,7 @@ func (s *Server) handleGetRoomById(w http.ResponseWriter, r *http.Request) error
 		return BadRequest()
 	}
 
-	q := `SELECT r.room_id, r.name FROM room r WHERE r.id = $1`
+	q := `SELECT r.room_id, r.name FROM room r WHERE r.room_id = $1`
 	row := s.db.QueryRow(context.Background(), q, id)
 	
 	var room RoomOutput

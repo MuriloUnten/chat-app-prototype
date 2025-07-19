@@ -17,6 +17,8 @@ type APIFunc func(w http.ResponseWriter, r *http.Request) error
 
 func makeHandler(handler APIFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("Request from %s\t%s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
+
 		err := handler(w, r)
 		if err != nil {
 			if e, ok := err.(APIError); ok {

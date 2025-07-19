@@ -58,6 +58,24 @@ func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
 	return writeJSON(w, http.StatusOK, output)
 }
 
+func (s *Server) handleGetRoomById(w http.ResponseWriter, r *http.Request) error {
+	id, err := getPathId("id", r)
+	if err != nil {
+		return BadRequest()
+	}
+
+	q := `SELECT r.room_id, r.name FROM room r WHERE r.id = $1`
+	row := s.db.QueryRow(context.Background(), q, id)
+	
+	var room RoomOutput
+	err = row.Scan(&room.Id, &room.Name)
+	if err != nil {
+		return writeJSON(w, http.StatusOK, nil)
+	}
+
+	return writeJSON(w, http.StatusOK, room)
+}
+
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error {
 
 	return nil

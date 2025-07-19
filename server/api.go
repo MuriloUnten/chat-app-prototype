@@ -59,7 +59,8 @@ func NewServer(port string) *Server {
 		log.Fatal(err)
 	}
 
-	http.HandleFunc("GET /rooms", makeHandler(s.handleGetRooms))
+	http.HandleFunc("GET /room", makeHandler(s.handleGetRooms))
+	http.HandleFunc("GET /room/{id}", makeHandler(s.handleGetRoomById))
 	http.HandleFunc("POST /create-room", makeHandler(s.handleCreateRoom))
 	http.HandleFunc("POST /join-room", makeHandler(s.handleJoinRoom))
 	http.HandleFunc("DELETE /delete-room", makeHandler(s.handleDeleteRoom))

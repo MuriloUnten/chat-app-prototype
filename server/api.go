@@ -72,7 +72,8 @@ func NewServer(port string) *Server {
 }
 
 func (s *Server) Run() {
-	defer s.db.Close()
 	fmt.Println("Server running on", s.port)
-	log.Fatal(http.ListenAndServe(s.port, nil))
+	err := http.ListenAndServe(s.port, nil)
+	s.db.Close()
+	log.Fatal(err)
 }

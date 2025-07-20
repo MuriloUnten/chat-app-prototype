@@ -144,7 +144,7 @@ func NewServer(port string) *Server {
 
 	http.HandleFunc("POST /user", makeHandler(s.handleCreateUser))
 	http.HandleFunc("GET /user/{userId}", makeHandler(s.handleGetUserById))
-	http.HandleFunc("DELETE /user", makeHandler(s.handleDeleteUser))
+	http.HandleFunc("DELETE /user", makeHandler(jwtMiddleware(s.handleDeleteUser)))
 
 	return s
 }

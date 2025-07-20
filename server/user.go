@@ -105,6 +105,23 @@ func (s *Server) handleGetUserById(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
+	id, err := getIdFromToken(r)
+	if err != nil {
+		return BadRequest()
+	}
+
+	// TODO manage jwt expiration
+
+	q := `DELETE FROM app_user WHERE user_id = $1`
+	_, err = s.db.Exec(context.Background(), q, id)
+	if err != nil {
+		return err
+	}
+
+	// TODO should probably double check what happened if no rows affected
+	// if cmdTag.RowsAffected == 0 {
+	//
+	// }
 
 	return nil
 }

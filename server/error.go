@@ -41,3 +41,10 @@ func InvalidJSONRequestData(errors map[string]string) APIError {
 		Msg: errors,
 	}
 }
+
+func  UserNotAuthenticated() APIError {
+	return APIError{
+		StatusCode: http.StatusUnauthorized,
+		Msg: "user not authenticated",
+	}
+}

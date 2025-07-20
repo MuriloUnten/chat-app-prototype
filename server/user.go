@@ -30,7 +30,7 @@ type UserOutput struct {
 }
 
 type CreateUserRequest struct {
-	User UserInput
+	User UserInput `json:"user"`
 }
 
 type CreateUserResponse struct {
@@ -54,7 +54,7 @@ func (r CreateUserRequest) validate() map[string]string {
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
 	var req CreateUserRequest
-	err := json.NewDecoder(r.Body).Decode(&req.User)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		return BadRequest()
 	}

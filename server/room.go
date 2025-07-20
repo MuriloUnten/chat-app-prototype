@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -10,27 +11,47 @@ type Room struct {
 	Id       int
 	Name     string
 	Password string
-	lastId   int64
+	Private  bool
+	OwnerId  int
 	users    []User
 }
 
 type RoomInput struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
+	Private  bool   `json:"private"`
 }
 
 type RoomOutput struct {
-	Id    int    `json:"id"`
-	Name  string `json:"name"`
-	Users []User `json:"users"`
+	Id      int    `json:"id"`
+	Name    string `json:"name"`
+	Private bool   `json:"private"`
+	Users   []User `json:"users"`
 }
 
 type CreateRoomRequest struct {
 	Room RoomInput `json:"room"`
 }
 
+func (r CreateRoomRequest) validate() map[string]string {
+	errs := make(map[string]string)
+
+	if r.Room.Private && len(r.Room.Password) == 0 {
+		errs["password"] = "private room must have a password"
+	}
+	if len(r.Room.Name) == 0 {
+		errs["name"] = "room must have a name"
+	}
+
+	return errs
+}
+
+type CreateRoomResponse struct {
+	Room RoomOutput `json:"room"`
+}
+
 type DeleteRoomRequest struct {
-	Room RoomInput `json:"room"`
+	RoomId int `json:"room_id"`
 }
 
 func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
@@ -77,8 +98,36 @@ func (s *Server) handleGetRoomById(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error {
+	userId, err := getIdFromToken(r)
+	if err != nil {
+		return UserNotAuthenticated()
+	}
 
-	return nil
+	var req CreateRoomRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		return BadRequest()
+	}
+
+	errs := req.validate()
+	if len(errs) > 0 {
+		return InvalidJSONRequestData(errs)
+	}
+
+	if req.Room.Private {
+		// TODO encrypt room password
+	}
+
+	q := `INSERT INTO room(name, password_hash, private, owner_id) VALUES($1, $2, $3, $4) RETURNING room_id, name, private`
+	row := s.db.QueryRow(context.Background(), q, req.Room.Name, req.Room.Password, req.Room.Private, userId)
+
+	var resp CreateRoomResponse
+	err = row.Scan(&resp.Room.Id, &resp.Room.Name, &resp.Room.Private)
+	if err != nil {
+		return err
+	}
+
+	return writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) error {

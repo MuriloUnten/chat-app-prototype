@@ -9,8 +9,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type APIFunc func(w http.ResponseWriter, r *http.Request) error
@@ -23,10 +26,67 @@ func makeHandler(handler APIFunc) http.HandlerFunc {
 		if err != nil {
 			if e, ok := err.(APIError); ok {
 				fmt.Println("API error:", e.Msg)
-				writeJSON(w, e.StatusCode, e.Msg)
+				writeJSON(w, e.StatusCode, e)
+			} else {
+				fmt.Println("error:", err)
+				writeJSON(w, http.StatusInternalServerError, "Internal Error")
 			}
 		}
 	}
+}
+
+var jwtSecret = []byte("TODO: stop using me")
+
+type CustomClaims struct {
+	UserId int `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
+func jwtMiddleware(handler APIFunc) APIFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+			return writeJSON(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
+		}
+
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+		token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			return writeJSON(w, http.StatusUnauthorized, "Invalid token")
+		}
+
+		if claims, ok := token.Claims.(*CustomClaims); ok {
+			pathId, err := getPathId("userId", r)
+			if err != nil {
+				return writeJSON(w, http.StatusUnauthorized, "Missing user id path value")
+			}
+			if pathId != claims.UserId {
+				return writeJSON(w, http.StatusUnauthorized, "Invalid token")
+			}
+		}
+
+		return handler(w, r)
+	}
+}
+
+func createJWT(userId int) (string, error) {
+	claims := CustomClaims{
+		UserId: userId,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) error {
@@ -34,6 +94,7 @@ func writeJSON(w http.ResponseWriter, status int, data any) error {
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(data)
 }
+
 
 func getPathId(wildcard string, r *http.Request) (int, error) {
 	v := r.PathValue(wildcard)
@@ -71,7 +132,7 @@ func NewServer(port string) *Server {
 	http.HandleFunc("DELETE /delete-room", makeHandler(s.handleDeleteRoom))
 
 	http.HandleFunc("POST /user", makeHandler(s.handleCreateUser))
-	http.HandleFunc("GET /user/{id}", makeHandler(s.handleGetUserById))
+	http.HandleFunc("GET /user/{userId}", makeHandler(s.handleGetUserById))
 	http.HandleFunc("DELETE /user", makeHandler(s.handleDeleteUser))
 
 	return s

@@ -6,15 +6,15 @@ import (
 )
 
 type APIError struct {
-	StatusCode int
-	Msg string
+	StatusCode int `json:"status_code"`
+	Msg        any `json:"msg"`
 }
 
 func (e APIError) Error() string {
 	return fmt.Sprintf("api error: %d", e.StatusCode)
 }
 
-func NewAPIError(status int, msg string) APIError {
+func NewAPIError(status int, msg any) APIError {
 	return APIError{
 		StatusCode: status,
 		Msg: msg,
@@ -32,5 +32,12 @@ func BadRequest() APIError {
 	return APIError{
 		StatusCode: http.StatusBadRequest,
 		Msg: "bad request",
+	}
+}
+
+func InvalidJSONRequestData(errors map[string]string) APIError {
+	return APIError{
+		StatusCode: http.StatusUnprocessableEntity,
+		Msg: errors,
 	}
 }

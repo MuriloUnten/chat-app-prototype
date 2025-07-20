@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+
 	// "encoding/json"
 	"net/http"
 )
@@ -31,9 +33,57 @@ type CreateUserRequest struct {
 	User UserInput
 }
 
+type CreateUserResponse struct {
+	Token string     `json:"token"`
+	User  UserOutput `json:"user"`
+}
+
+func (r CreateUserRequest) validate() map[string]string {
+	errs := make(map[string]string)
+	if len(r.User.Name) < 3 {
+		errs["name"] = "name must be at least 3 characters long"
+	}
+
+	if len(r.User.Password) < 12 {
+		errs["password"] = "password must be at least 12 characters long"
+	}
+	// TODO add better validation for weak passwords
+
+	return errs
+}
+
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
+	var req CreateUserRequest
+	err := json.NewDecoder(r.Body).Decode(&req.User)
+	if err != nil {
+		return BadRequest()
+	}
+
+	errs := req.validate()
+	if len(errs) > 0 {
+		return NewAPIError(http.StatusUnprocessableEntity, errs)
+	}
 	
-	return nil
+	q := `INSERT INTO app_user(name, password_hash) VALUES($1, $2) RETURNING user_id, name`
+	row := s.db.QueryRow(context.Background(), q, &req.User.Name, &req.User.Password)
+
+	var user UserOutput
+	err = row.Scan(&user.Id, &user.Name)
+	if err != nil {
+		return err
+	}
+
+	jwt, err := createJWT(user.Id)
+	if err != nil {
+		return err
+	}
+
+	response := CreateUserResponse{
+		Token: jwt,
+		User: user,
+	}
+	
+	return writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleGetUserById(w http.ResponseWriter, r *http.Request) error {

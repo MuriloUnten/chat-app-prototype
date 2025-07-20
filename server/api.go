@@ -60,6 +60,9 @@ func NewServer(port string) *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err = s.db.Ping(context.Background()); err != nil {
+		log.Fatal(err)
+	}
 
 	http.HandleFunc("GET /room", makeHandler(s.handleGetRooms))
 	http.HandleFunc("GET /room/{id}", makeHandler(s.handleGetRoomById))

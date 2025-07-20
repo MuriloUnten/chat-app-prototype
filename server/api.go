@@ -73,7 +73,7 @@ func jwtMiddleware(handler APIFunc) APIFunc {
 		}
 
 		ctx := context.WithValue(r.Context(), userIdClaim, claims.UserId)
-		r.WithContext(ctx)
+		r = r.WithContext(ctx)
 
 		return handler(w, r)
 	}

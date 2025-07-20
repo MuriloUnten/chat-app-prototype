@@ -18,6 +18,11 @@ import (
 
 type APIFunc func(w http.ResponseWriter, r *http.Request) error
 
+type TokenClaim string
+const (
+	userIdClaim = TokenClaim("userId")
+)
+
 func makeHandler(handler APIFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Request from %s\t%s %s\n", r.RemoteAddr, r.Method, r.URL.Path)
@@ -62,15 +67,13 @@ func jwtMiddleware(handler APIFunc) APIFunc {
 			return writeJSON(w, http.StatusUnauthorized, "Invalid token")
 		}
 
-		if claims, ok := token.Claims.(*CustomClaims); ok {
-			pathId, err := getPathId("userId", r)
-			if err != nil {
-				return writeJSON(w, http.StatusUnauthorized, "Missing user id path value")
-			}
-			if pathId != claims.UserId {
-				return writeJSON(w, http.StatusUnauthorized, "Invalid token")
-			}
+		claims, ok := token.Claims.(*CustomClaims)
+		if !ok {
+			return writeJSON(w, http.StatusUnauthorized, "Invalid token")
 		}
+
+		ctx := context.WithValue(r.Context(), userIdClaim, claims.UserId)
+		r.WithContext(ctx)
 
 		return handler(w, r)
 	}
@@ -87,6 +90,14 @@ func createJWT(userId int) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(jwtSecret)
+}
+
+func getIdFromToken(r *http.Request) (int, error) {
+	id, ok := r.Context().Value(userIdClaim).(int)
+	if !ok {
+		return 0, fmt.Errorf("unable to retrieve id from context")
+	}
+	return id, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) error {

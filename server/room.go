@@ -26,6 +26,7 @@ type RoomOutput struct {
 	Id      int    `json:"id"`
 	Name    string `json:"name"`
 	Private bool   `json:"private"`
+	OwnerId int    `json:"owner_id"`
 	Users   []User `json:"users"`
 }
 
@@ -55,7 +56,7 @@ type DeleteRoomRequest struct {
 }
 
 func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
-	q := `SELECT r.room_id, r.name FROM room r`
+	q := `SELECT r.room_id, r.name, r.private, r.owner_id FROM room r`
 
 	output := make([]RoomOutput, 0)
 	rows, err := s.db.Query(context.Background(), q)
@@ -66,14 +67,14 @@ func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		var r RoomOutput
-		err := rows.Scan(&r.Id, &r.Name)
+		var room RoomOutput
+		err := rows.Scan(&room.Id, &room.Name, &room.Private, &room.OwnerId)
 		if err != nil {
 			fmt.Println("scan error:", err.Error())
 			return InternalError()
 		}
 
-		output = append(output, r)
+		output = append(output, room)
 	}
 
 	return writeJSON(w, http.StatusOK, output)
@@ -85,11 +86,11 @@ func (s *Server) handleGetRoomById(w http.ResponseWriter, r *http.Request) error
 		return BadRequest()
 	}
 
-	q := `SELECT r.room_id, r.name FROM room r WHERE r.room_id = $1`
+	q := `SELECT r.room_id, r.name, r.private, r.owner_id FROM room r WHERE r.room_id = $1`
 	row := s.db.QueryRow(context.Background(), q, id)
 	
 	var room RoomOutput
-	err = row.Scan(&room.Id, &room.Name)
+	err = row.Scan(&room.Id, &room.Name, &room.Private, &room.OwnerId)
 	if err != nil {
 		return writeJSON(w, http.StatusOK, nil)
 	}
@@ -118,11 +119,11 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error 
 		// TODO encrypt room password
 	}
 
-	q := `INSERT INTO room(name, password_hash, private, owner_id) VALUES($1, $2, $3, $4) RETURNING room_id, name, private`
+	q := `INSERT INTO room(name, password_hash, private, owner_id) VALUES($1, $2, $3, $4) RETURNING room_id, name, private, owner_id`
 	row := s.db.QueryRow(context.Background(), q, req.Room.Name, req.Room.Password, req.Room.Private, userId)
 
 	var resp CreateRoomResponse
-	err = row.Scan(&resp.Room.Id, &resp.Room.Name, &resp.Room.Private)
+	err = row.Scan(&resp.Room.Id, &resp.Room.Name, &resp.Room.Private, &resp.Room.OwnerId)
 	if err != nil {
 		return err
 	}

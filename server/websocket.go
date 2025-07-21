@@ -53,6 +53,22 @@ func NewClient(hub *Hub, conn *websocket.Conn, u UserOutput) *Client {
 	}
 }
 
+type Hub struct {
+	clients    map[int]*Client
+	broadcast  chan Message
+	register   chan *Client
+	unregister chan *Client
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		clients:    make(map[int]*Client),
+		broadcast:  make(chan Message),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+	}
+}
+
 func (c *Client) readInboundMsgs() {
 	defer func() {
 		c.hub.unregister <- c
@@ -130,53 +146,7 @@ func (c *Client) writeOutboundMsgs() {
 	}
 }
 
-type WSRoom struct {
-	members map[int]bool
-}
-
-func NewWSRoom() *WSRoom {
-	return &WSRoom{
-		members: make(map[int]bool),
-	}
-}
-
-type Hub struct {
-	clients map[int]*Client
-	rooms   map[int]*WSRoom
-
-	broadcast  chan Message
-	register   chan *Client
-	unregister chan *Client
-}
-
-func NewHub() *Hub {
-	return &Hub{
-		clients:    make(map[int]*Client),
-		rooms:      make(map[int]*WSRoom),
-		broadcast:  make(chan Message),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-	}
-}
-
 func (h *Hub) Run(s *Server) {
-	q := `SELECT room_id, user_id FROM room_user`
-	rows, err := s.db.Query(context.Background(), q)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var roomId, userId int
-	for rows.Next() {
-		rows.Scan(&roomId, &userId)
-		room, ok := h.rooms[roomId]
-		if !ok {
-			room = NewWSRoom()
-		}
-		room.members[userId] = true
-		h.rooms[roomId] = room
-	}
-
 	for {
 		select {
 		case client := <-h.register:
@@ -195,13 +165,16 @@ func (h *Hub) Run(s *Server) {
 				log.Fatal("websocket message marshalling error:", err)
 			}
 
-			room := h.rooms[roomId]
+			s.roomsMutex.RLock()
+			defer s.roomsMutex.RUnlock()
+
+			room := s.rooms[roomId]
 			if room == nil {
 				// TODO would be nice to send a message back telling the client that the room doesn't exist
 				break
 			}
 
-			for userId := range room.members {
+			for userId := range room {
 				client := h.clients[userId]
 				if client == nil {
 					continue
@@ -239,8 +212,6 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) error {
 		// This avoids appending to the response
 		return nil
 	}
-
-	// TODO get all rooms the client previously connected to and update the client info on them
 
 	client := NewClient(s.websocketHub, conn, u)
 	client.hub.register <- client

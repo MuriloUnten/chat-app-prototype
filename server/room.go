@@ -16,6 +16,8 @@ type Room struct {
 	OwnerId  int
 }
 
+type RoomMemberMap map[int]bool
+
 type RoomInput struct {
 	Name     string `json:"name"`
 	Password string `json:"password"`
@@ -142,6 +144,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
+	s.roomsMutex.Lock()
+	defer s.roomsMutex.Unlock()
+	s.rooms[resp.Room.Id] = make(RoomMemberMap)
+
+	// TODO broadcast room creation
+
 	return writeJSON(w, http.StatusOK, resp)
 }
 
@@ -187,7 +195,12 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) error {
 		return InternalError()
 	}
 
-	// TODO Handle sync with chat service
+	s.roomsMutex.Lock()
+	defer s.roomsMutex.Unlock()
+	s.rooms[req.RoomId][userId] = true
+
+	// TODO Broadcast user joining room to room members
+
 	return nil
 }
 

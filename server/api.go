@@ -10,10 +10,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type APIFunc func(w http.ResponseWriter, r *http.Request) error
@@ -118,25 +119,22 @@ func getPathId(wildcard string, r *http.Request) (int, error) {
 }
 
 type Server struct {
-	port string
-	db *pgxpool.Pool
+	port         string
+	db           *pgxpool.Pool
 	websocketHub *Hub
+	rooms        map[int]RoomMemberMap
+	roomsMutex   sync.RWMutex
 }
 
 func NewServer(port string) *Server {
 	s := &Server{
 		port: port,
 		websocketHub: NewHub(),
+		rooms: make(map[int]RoomMemberMap),
 	}
 
-	var err error
-	s.db, err = pgxpool.New(context.Background(), os.Getenv("DB_URL"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err = s.db.Ping(context.Background()); err != nil {
-		log.Fatal(err)
-	}
+	s.initDB()
+	s.populateRooms()
 
 	http.HandleFunc("GET /room", makeHandler(s.handleGetRooms))
 	http.HandleFunc("GET /room/{id}", makeHandler(s.handleGetRoomById))
@@ -159,4 +157,34 @@ func (s *Server) Run() {
 	err := http.ListenAndServe(s.port, nil)
 	s.db.Close()
 	log.Fatal(err)
+}
+
+func (s *Server) initDB() {
+	var err error
+	s.db, err = pgxpool.New(context.Background(), os.Getenv("DB_URL"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err = s.db.Ping(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func (s *Server) populateRooms() {
+	q := `SELECT room_id, user_id FROM room_user`
+	rows, err := s.db.Query(context.Background(), q)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var roomId, userId int
+	for rows.Next() {
+		rows.Scan(&roomId, &userId)
+		room, ok := s.rooms[roomId]
+		if !ok {
+			room = make(RoomMemberMap)
+		}
+		room[userId] = true
+		s.rooms[roomId] = room
+	}
 }

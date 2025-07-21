@@ -120,11 +120,13 @@ func getPathId(wildcard string, r *http.Request) (int, error) {
 type Server struct {
 	port string
 	db *pgxpool.Pool
+	websocketHub *Hub
 }
 
 func NewServer(port string) *Server {
 	s := &Server{
 		port: port,
+		websocketHub: NewHub(),
 	}
 
 	var err error
@@ -146,11 +148,14 @@ func NewServer(port string) *Server {
 	http.HandleFunc("GET /user/{userId}", makeHandler(s.handleGetUserById))
 	http.HandleFunc("DELETE /user", makeHandler(jwtMiddleware(s.handleDeleteUser)))
 
+	http.HandleFunc("GET /ws", makeHandler(jwtMiddleware(s.handleWebSocket)))
+
 	return s
 }
 
 func (s *Server) Run() {
 	fmt.Println("Server running on", s.port)
+	go s.websocketHub.Run(s)
 	err := http.ListenAndServe(s.port, nil)
 	s.db.Close()
 	log.Fatal(err)

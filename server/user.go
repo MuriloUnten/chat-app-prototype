@@ -107,7 +107,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) error 
 	// Ensure name is not already taken
 	q := `SELECT 1 FROM app_user WHERE name = $1 LIMIT 1`
 	row := s.db.QueryRow(context.Background(), q, req.User.Name)
-	err = row.Scan()
+	err = row.Scan(nil)
 	if err == nil {
 		return NewAPIError(http.StatusConflict, "name already taken")
 	}

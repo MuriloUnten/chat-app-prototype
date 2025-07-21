@@ -18,7 +18,6 @@ type User struct {
 	Id       int64
 	Name     string
 	Password string
-	// ... conn stuff maybe
 }
 
 type UserInput struct {
@@ -106,7 +105,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// Ensure name is not already taken
-	q := `SELECT 1 FROM user WHERE name = $1 LIMIT 1`
+	q := `SELECT 1 FROM app_user WHERE name = $1 LIMIT 1`
 	row := s.db.QueryRow(context.Background(), q, req.User.Name)
 	err = row.Scan()
 	if err == nil {

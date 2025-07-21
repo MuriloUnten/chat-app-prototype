@@ -10,10 +10,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type UserHandler struct {
-	
-}
-
 type User struct {
 	Id       int64
 	Name     string
@@ -173,10 +169,13 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error 
 		return err
 	}
 
-	// TODO should probably double check what happened if no rows affected
-	// if cmdTag.RowsAffected == 0 {
-	//
-	// }
+	s.roomsMutex.Lock()
+	defer s.roomsMutex.Unlock()
+	for _, room := range s.rooms {
+		if _, ok := room[id]; ok {
+			delete(room, id)
+		}
+	}
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"golang.org/x/crypto/bcrypt"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -39,6 +40,10 @@ func (r CreateRoomRequest) validate() map[string]string {
 
 	if r.Room.Private && len(r.Room.Password) == 0 {
 		errs["password"] = "private room must have a password"
+	}
+
+	if r.Room.Private && len(r.Room.Password) > 72 {
+		errs["password"] = "password must not exceed 72 characters"
 	}
 	if len(r.Room.Name) == 0 {
 		errs["name"] = "room must have a name"
@@ -115,12 +120,17 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error 
 		return InvalidJSONRequestData(errs)
 	}
 
+	var hash string = ""
 	if req.Room.Private {
-		// TODO encrypt room password
+		hashBytes, err := bcrypt.GenerateFromPassword([]byte(req.Room.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		hash = string(hashBytes)
 	}
 
 	q := `INSERT INTO room(name, password_hash, private, owner_id) VALUES($1, $2, $3, $4) RETURNING room_id, name, private, owner_id`
-	row := s.db.QueryRow(context.Background(), q, req.Room.Name, req.Room.Password, req.Room.Private, userId)
+	row := s.db.QueryRow(context.Background(), q, req.Room.Name, hash, req.Room.Private, userId)
 
 	var resp CreateRoomResponse
 	err = row.Scan(&resp.Room.Id, &resp.Room.Name, &resp.Room.Private, &resp.Room.OwnerId)

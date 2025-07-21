@@ -14,7 +14,6 @@ type Room struct {
 	Password string
 	Private  bool
 	OwnerId  int
-	users    []User
 }
 
 type RoomInput struct {
@@ -58,6 +57,11 @@ type CreateRoomResponse struct {
 
 type DeleteRoomRequest struct {
 	RoomId int `json:"room_id"`
+}
+
+type JoinRoomRequest struct {
+	RoomId   int    `json:"room_id"`
+	Password string `json:"password"`
 }
 
 func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
@@ -142,7 +146,48 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) error {
-	
+	userId, err := getIdFromToken(r)
+	if err != nil {
+		return UserNotAuthenticated()
+	}
+
+	var req JoinRoomRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		return BadRequest()
+	}
+
+	q := `SELECT 1 FROM room_user WHERE room_id = $1 AND user_id = $2`
+	err = s.db.QueryRow(context.Background(), q, req.RoomId, userId).Scan(nil)
+	if err == nil {
+		// TODO Handle user already in the room
+		return writeJSON(w, http.StatusOK, "already in the room")
+	}
+
+	var room Room
+	q = `SELECT r.private, r.password_hash FROM room r WHERE room_id = $1`
+	err = s.db.QueryRow(context.Background(), q, req.RoomId).Scan(&room.Private, &room.Password)
+	if err != nil {
+		return BadRequest()
+	}
+
+	if room.Private {
+		err := bcrypt.CompareHashAndPassword([]byte(room.Password), []byte(req.Password))
+		if err != nil {
+			return NewAPIError(http.StatusUnauthorized, "invalid room password")
+		}
+	}
+
+	q = `INSERT INTO room_user(room_id, user_id) VALUES($1, $2)`
+	tag, err := s.db.Exec(context.Background(), q, req.RoomId, userId)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return InternalError()
+	}
+
+	// TODO Handle sync with chat service
 	return nil
 }
 

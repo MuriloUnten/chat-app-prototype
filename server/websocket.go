@@ -131,12 +131,21 @@ func (c *Client) readInboundMsgs() {
 			c.send <- malformedMessage()
 			continue
 		}
+
 		var chat ChatMsg
 		err = json.Unmarshal(message.Data, &chat)
 		if err != nil {
 			c.send <- malformedMessage()
 			continue
 		}
+
+		c.hub.s.roomsMutex.RLock()
+		defer c.hub.s.roomsMutex.RUnlock()
+		if c.hub.s.rooms[chat.RoomId] == nil {
+			c.send <- roomNotFound(chat.RoomId)
+			continue
+		}
+
 		chat.Sender.Id = c.Id
 		chat.Sender.Name = c.Name
 		message.Data, _ = json.Marshal(chat)
@@ -145,6 +154,27 @@ func (c *Client) readInboundMsgs() {
 	}
 
 	fmt.Println("ws: disconnecting client", c.Id, c.Name)
+}
+
+func roomNotFound(roomId int) []byte {
+	errMsg := ErrorMsg{
+		Error: fmt.Sprintf("room with id: %d not found", roomId),
+	}
+	data, err := json.Marshal(errMsg)
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	msg := Message{
+		Type: ErrorMsgType,
+		Data: data,
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	return b
 }
 
 func malformedMessage() []byte {
@@ -262,13 +292,8 @@ func (h *Hub) BroadcastToRoom(message []byte, roomId int, senderId int) {
 	h.s.roomsMutex.RLock()
 	defer h.s.roomsMutex.RUnlock()
 
-	// TODO Remove returning of error message from here. Should only handle broadcasting in here
 	room := h.s.rooms[roomId]
 	if room == nil {
-		if client := h.clients[senderId]; client != nil {
-			// TODO would be nice to send a message back telling the client that the room doesn't exist
-			// client.send <- ErrorMsg{}
-		}
 		return
 	}
 

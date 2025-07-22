@@ -148,7 +148,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error 
 	defer s.roomsMutex.Unlock()
 	s.rooms[resp.Room.Id] = make(RoomMemberMap)
 
-	// TODO broadcast room creation
+	s.websocketHub.BroadcastGlobal(newEventMsg(RoomCreatedEventType, resp.Room.Id, resp.Room.OwnerId))
 
 	return writeJSON(w, http.StatusOK, resp)
 }
@@ -168,7 +168,6 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) error {
 	q := `SELECT 1 FROM room_user WHERE room_id = $1 AND user_id = $2`
 	err = s.db.QueryRow(context.Background(), q, req.RoomId, userId).Scan(nil)
 	if err == nil {
-		// TODO Handle user already in the room
 		return writeJSON(w, http.StatusOK, "already in the room")
 	}
 
@@ -196,15 +195,61 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	s.roomsMutex.Lock()
-	defer s.roomsMutex.Unlock()
 	s.rooms[req.RoomId][userId] = true
+	s.roomsMutex.Unlock()
 
-	// TODO Broadcast user joining room to room members
+	s.websocketHub.BroadcastToRoom(newEventMsg(UserJoinedEventType, req.RoomId, userId), req.RoomId, userId)
 
 	return nil
 }
 
 func (s *Server) handleDeleteRoom(w http.ResponseWriter, r *http.Request) error {
+	userId, err := getIdFromToken(r)
+	if err != nil {
+		return UserNotAuthenticated()
+	}
+
+	var req DeleteRoomRequest
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		return BadRequest()
+	}
+
+	q := `SELECT owner_id FROM room WHERE room_id = $1`
+	row := s.db.QueryRow(context.Background(), q, req.RoomId)
+
+	var ownerId int
+	err = row.Scan(&ownerId)
+	if err != nil {
+		return BadRequest()
+	}
+
+	if userId != ownerId {
+		return APIError{
+			StatusCode: http.StatusUnauthorized,
+			Msg: "you must be the room owner to delete it",
+		}
+	}
+
+	{ // Delete room in database
+		q = `DELETE FROM room_user WHERE room_id = $1`
+		_, err = s.db.Exec(context.Background(), q, req.RoomId)
+		if err != nil {
+			return err
+		}
+
+		q = `DELETE FROM room WHERE room_id = $1`
+		_, err = s.db.Exec(context.Background(), q, req.RoomId)
+		if err != nil {
+			return err
+		}
+	}
+
+	s.websocketHub.BroadcastGlobal(newEventMsg(RoomDeletedEventType, req.RoomId, ownerId))
+
+	s.roomsMutex.Lock()
+	delete(s.rooms, req.RoomId)
+	s.roomsMutex.Unlock()
 	
 	return nil
 }

@@ -54,9 +54,9 @@ type ChatMsg struct {
 }
 
 type EventMsg struct {
-	Event EventType  `json:"event"`
-	User  UserOutput `json:"user"`
-	Room  RoomOutput `json:"room"`
+	Event  EventType `json:"event"`
+	UserId int       `json:"userId"`
+	RoomId int       `json:"roomId"`
 }
 
 type ErrorMsg struct {
@@ -123,26 +123,26 @@ func (c *Client) readInboundMsgs() {
 		var message Message
 		err = json.Unmarshal(messageBytes, &message)
 		if err != nil {
-			c.send <- malformedMessage()
+			c.send <- malformedMessageMsg()
 			continue
 		}
 
 		if message.Type != ChatMsgType {
-			c.send <- malformedMessage()
+			c.send <- malformedMessageMsg()
 			continue
 		}
 
 		var chat ChatMsg
 		err = json.Unmarshal(message.Data, &chat)
 		if err != nil {
-			c.send <- malformedMessage()
+			c.send <- malformedMessageMsg()
 			continue
 		}
 
 		c.hub.s.roomsMutex.RLock()
 		defer c.hub.s.roomsMutex.RUnlock()
 		if c.hub.s.rooms[chat.RoomId] == nil {
-			c.send <- roomNotFound(chat.RoomId)
+			c.send <- roomNotFoundMsg(chat.RoomId)
 			continue
 		}
 
@@ -156,9 +156,32 @@ func (c *Client) readInboundMsgs() {
 	fmt.Println("ws: disconnecting client", c.Id, c.Name)
 }
 
-func roomNotFound(roomId int) []byte {
+func newEventMsg(eventType EventType, roomId int, userId int) []byte {
+	eventMsg := EventMsg{
+		Event: eventType,
+		RoomId: roomId,
+		UserId: userId,
+	}
+	data, err := json.Marshal(eventMsg)
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	msg := Message{
+		Type: EventMsgType,
+		Data: data,
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	return b
+}
+
+func newErrorMsg(e string) []byte {
 	errMsg := ErrorMsg{
-		Error: fmt.Sprintf("room with id: %d not found", roomId),
+		Error: e,
 	}
 	data, err := json.Marshal(errMsg)
 	if err != nil {
@@ -177,23 +200,12 @@ func roomNotFound(roomId int) []byte {
 	return b
 }
 
-func malformedMessage() []byte {
-	fmt.Println("received malformed message")
-	data, err := json.Marshal("malformed message")
-	if err != nil {
-		log.Fatal("error generating constant message:", err)
-	}
+func roomNotFoundMsg(roomId int) []byte {
+	return newErrorMsg(fmt.Sprintf("room with id: %d not found", roomId))
+}
 
-	msg := Message{
-		Type: ErrorMsgType,
-		Data: data,
-	}
-	b, err := json.Marshal(msg)
-	if err != nil {
-		log.Fatal("error generating constant message:", err)
-	}
-
-	return b
+func malformedMessageMsg() []byte {
+	return newErrorMsg("malformed message")
 }
 
 func (c *Client) writeOutboundMsgs() {
@@ -271,7 +283,7 @@ func (h *Hub) Run(s *Server) {
 
 				switch eventMsg.Event {
 				case UserJoinedEventType, UserLeftEventType:
-					h.BroadcastToRoom(msgBytes, eventMsg.Room.Id, eventMsg.User.Id)
+					h.BroadcastToRoom(msgBytes, eventMsg.RoomId, eventMsg.UserId)
 
 				case RoomCreatedEventType, RoomDeletedEventType:
 					h.BroadcastGlobal(msgBytes)

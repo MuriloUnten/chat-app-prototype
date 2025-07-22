@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -26,15 +27,40 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: websocketBufferSize,
 }
 
+type MsgType string
+const (
+	ChatMsgType  MsgType = "chat"
+	EventMsgType MsgType = "event"
+	ErrorMsgType MsgType = "error"
+)
+
+type EventType string
+const (
+	UserJoinedEventType  EventType = "user_joined"
+	UserLeftEventType    EventType = "user_left"
+	RoomCreatedEventType EventType = "room_created"
+	RoomDeletedEventType EventType = "room_deleted"
+)
+
 type Message struct {
-	Type    string         `json:"type"`
-	Content MessageContent `json:"content"`
+	Type MsgType         `json:"type"`
+	Data json.RawMessage `json:"data"`
 }
 
-type MessageContent struct {
-	RoomId int        `json:"room_id"`
-	Sender UserOutput `json:"sender"`
-	Text   string     `json:"text"`
+type ChatMsg struct {
+	RoomId  int        `json:"room_id"`
+	Sender  UserOutput `json:"sender"`
+	Content string     `json:"text"`
+}
+
+type EventMsg struct {
+	Event EventType  `json:"event"`
+	User  UserOutput `json:"user"`
+	Room  RoomOutput `json:"room"`
+}
+
+type ErrorMsg struct {
+	Error string `json:"error"`
 }
 
 type Client struct {
@@ -58,14 +84,18 @@ type Hub struct {
 	broadcast  chan Message
 	register   chan *Client
 	unregister chan *Client
+
+	// TODO Refactor this ASAP (this is entirely too stupid)
+	s *Server
 }
 
-func NewHub() *Hub {
+func NewHub(s *Server) *Hub {
 	return &Hub{
 		clients:    make(map[int]*Client),
 		broadcast:  make(chan Message),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
+		s: s,
 	}
 }
 
@@ -82,6 +112,7 @@ func (c *Client) readInboundMsgs() {
 	for {
 		msgType, messageBytes, err := c.conn.ReadMessage()
 		if err != nil {
+			fmt.Println("websocket error:", err)
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
 			}
@@ -96,16 +127,43 @@ func (c *Client) readInboundMsgs() {
 			continue
 		}
 
-		message.Content.Sender.Id = c.Id
-		message.Content.Sender.Name = c.Name
+		if message.Type != ChatMsgType {
+			c.send <- malformedMessage()
+			continue
+		}
+		var chat ChatMsg
+		err = json.Unmarshal(message.Data, &chat)
+		if err != nil {
+			c.send <- malformedMessage()
+			continue
+		}
+		chat.Sender.Id = c.Id
+		chat.Sender.Name = c.Name
+		message.Data, _ = json.Marshal(chat)
 
 		c.hub.broadcast <- message
 	}
+
+	fmt.Println("ws: disconnecting client", c.Id, c.Name)
 }
 
 func malformedMessage() []byte {
-	// TODO implement message response for malformed message
-	return []byte("malformed message")
+	fmt.Println("received malformed message")
+	data, err := json.Marshal("malformed message")
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	msg := Message{
+		Type: ErrorMsgType,
+		Data: data,
+	}
+	b, err := json.Marshal(msg)
+	if err != nil {
+		log.Fatal("error generating constant message:", err)
+	}
+
+	return b
 }
 
 func (c *Client) writeOutboundMsgs() {
@@ -120,7 +178,7 @@ func (c *Client) writeOutboundMsgs() {
 		case message, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				// TODO better format thism message
+				// TODO better format this message
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
@@ -159,36 +217,80 @@ func (h *Hub) Run(s *Server) {
 			}
 
 		case msg := <-h.broadcast:
-			roomId := msg.Content.RoomId
 			msgBytes, err := json.Marshal(msg)
 			if err != nil {
-				log.Fatal("websocket message marshalling error:", err)
+				log.Fatal("websocket message json marshalling error:", err)
 			}
 
-			s.roomsMutex.RLock()
-			defer s.roomsMutex.RUnlock()
-
-			room := s.rooms[roomId]
-			if room == nil {
-				// TODO would be nice to send a message back telling the client that the room doesn't exist
-				break
-			}
-
-			for userId := range room {
-				client := h.clients[userId]
-				if client == nil {
+			switch msg.Type {
+			case ChatMsgType:
+				var chatMsg ChatMsg
+				err := json.Unmarshal(msg.Data, &chatMsg)
+				if err != nil {
 					continue
 				}
 
-				select {
-				case client.send <- msgBytes:
+				h.BroadcastToRoom(msgBytes, chatMsg.RoomId, chatMsg.Sender.Id)
+
+			case EventMsgType:
+				var eventMsg EventMsg
+				err := json.Unmarshal(msg.Data, &eventMsg)
+				if err != nil {
+					continue
+				}
+
+				switch eventMsg.Event {
+				case UserJoinedEventType, UserLeftEventType:
+					h.BroadcastToRoom(msgBytes, eventMsg.Room.Id, eventMsg.User.Id)
+
+				case RoomCreatedEventType, RoomDeletedEventType:
+					h.BroadcastGlobal(msgBytes)
 
 				default:
-					delete(h.clients, userId)
-					close(client.send)
+					continue
 				}
+
+			default:
+				fmt.Printf("messageType: %s is not handled by broadcast\n", msg.Type)
+				continue
 			}
 		}
+	}
+}
+
+func (h *Hub) BroadcastToRoom(message []byte, roomId int, senderId int) {
+	h.s.roomsMutex.RLock()
+	defer h.s.roomsMutex.RUnlock()
+
+	// TODO Remove returning of error message from here. Should only handle broadcasting in here
+	room := h.s.rooms[roomId]
+	if room == nil {
+		if client := h.clients[senderId]; client != nil {
+			// TODO would be nice to send a message back telling the client that the room doesn't exist
+			// client.send <- ErrorMsg{}
+		}
+		return
+	}
+
+	for userId := range room {
+		client := h.clients[userId]
+		if client == nil {
+			continue
+		}
+
+		select {
+		case client.send <- message:
+
+		default:
+			delete(h.clients, userId)
+			close(client.send)
+		}
+	}
+}
+
+func (h *Hub) BroadcastGlobal(message []byte) {
+	for _, client := range h.clients {
+		client.send <- message
 	}
 }
 

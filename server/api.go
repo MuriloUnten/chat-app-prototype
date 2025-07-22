@@ -129,9 +129,9 @@ type Server struct {
 func NewServer(port string) *Server {
 	s := &Server{
 		port: port,
-		websocketHub: NewHub(),
 		rooms: make(map[int]RoomMemberMap),
 	}
+	s.websocketHub = NewHub(s)
 
 	s.initDB()
 	s.populateRooms()

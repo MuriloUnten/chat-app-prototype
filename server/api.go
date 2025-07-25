@@ -136,17 +136,19 @@ func NewServer(port string) *Server {
 	s.initDB()
 	s.populateRooms()
 
-	http.HandleFunc("GET /room", makeHandler(s.handleGetRooms))
-	http.HandleFunc("GET /room/{id}", makeHandler(s.handleGetRoomById))
-	http.HandleFunc("POST /room", makeHandler(jwtMiddleware(s.handleCreateRoom)))
-	http.HandleFunc("POST /join-room", makeHandler(jwtMiddleware(s.handleJoinRoom)))
-	http.HandleFunc("DELETE /delete-room", makeHandler(jwtMiddleware(s.handleDeleteRoom)))
+	http.HandleFunc("GET /api/room", makeHandler(s.handleGetRooms))
+	http.HandleFunc("GET /api/room/{id}", makeHandler(s.handleGetRoomById))
+	http.HandleFunc("POST /api/room", makeHandler(jwtMiddleware(s.handleCreateRoom)))
+	http.HandleFunc("POST /api/join-room", makeHandler(jwtMiddleware(s.handleJoinRoom)))
+	http.HandleFunc("DELETE /api/delete-room", makeHandler(jwtMiddleware(s.handleDeleteRoom)))
 
-	http.HandleFunc("POST /user", makeHandler(s.handleCreateUser))
-	http.HandleFunc("GET /user/{userId}", makeHandler(s.handleGetUserById))
-	http.HandleFunc("DELETE /user", makeHandler(jwtMiddleware(s.handleDeleteUser)))
+	http.HandleFunc("POST /api/user", makeHandler(s.handleCreateUser))
+	http.HandleFunc("GET /api/user/{userId}", makeHandler(s.handleGetUserById))
+	http.HandleFunc("DELETE /api/user", makeHandler(jwtMiddleware(s.handleDeleteUser)))
 
-	http.HandleFunc("GET /ws", makeHandler(jwtMiddleware(s.handleWebSocket)))
+	http.HandleFunc("POST /api/login", makeHandler(s.handleUserLogin))
+
+	http.HandleFunc("GET /api/ws", makeHandler(jwtMiddleware(s.handleWebSocket)))
 
 	return s
 }

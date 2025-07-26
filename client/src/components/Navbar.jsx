@@ -19,30 +19,13 @@ function Navbar() {
                 <Link to="/dashboard">Dashboard</Link>
             </div>
 
-            <div className="relative">
+            <div className="relative w-20 h-8 rounded-full bg-gray-200 flex items-center justify-center">
                 <button
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                    onClick={ handleLogout}
+                    className=""
                 >
-                    <span className="text-sm">👤</span>
+                    Logout
                 </button>
-
-                {isMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white shadow-lg rounded p-2 z-10">
-                        <button className="w-full text-left px-2 py-1 hover:bg-gray-100">
-                            Profile
-                        </button>
-                        <button className="w-full text-left px-2 py-1 hover:bg-gray-100">
-                            Settings
-                        </button>
-                        <button
-                            className="w-full text-left px-2 py-1 hover:bg-gray-100"
-                            onClick={ handleLogout }
-                        >
-                            Logout
-                        </button>
-                    </div>
-                )}
             </div>
         </nav>
     );

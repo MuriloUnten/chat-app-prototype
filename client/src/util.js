@@ -5,6 +5,7 @@ export function authFetch(url, options = {}) {
     return fetchJSON(url, {
         ...options,
         headers: {
+            ...options.headers,
             "Authorization": `Bearer ${token}`,
         }
     });
@@ -14,6 +15,7 @@ export function fetchJSON(url, options = {}) {
     return fetch(url, {
         ...options,
         headers: {
+            ...options.headers,
             "Content-Type": "application/json"
         }
     });

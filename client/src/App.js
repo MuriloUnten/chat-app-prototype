@@ -26,6 +26,14 @@ export default function App() {
                         }
                     />
                     <Route
+                        path="/dashboard"
+                        element={
+                            <AuthenticatedLayout>
+                                <Dashboard />
+                            </AuthenticatedLayout>
+                        }
+                    />
+                    <Route
                         path="/create-room"
                         element={
                             <AuthenticatedLayout>

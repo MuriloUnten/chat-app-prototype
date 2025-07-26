@@ -29,7 +29,7 @@ function JoinRoomDialog({ room, onClose, onConfirm }) {
                     </button>
                     <button
                         className="bg-blue-600 text-white px-4 py-2 rounded"
-                        onClick={() => onConfirm()}
+                        onClick={() => onConfirm.joinRoom()}
                     >
                         Join
                     </button>

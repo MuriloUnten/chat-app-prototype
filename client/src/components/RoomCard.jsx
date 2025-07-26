@@ -1,18 +1,39 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { authFetch } from "../util";
 
 import JoinRoomDialog from "./JoinRoomDialog"
 
 function RoomCard({ room }) {
+    const navigate = useNavigate()
     const [showDialog, setShowDialog] = useState(false);
     const [password, setPassword] = useState("");
 
-    const handleJoinClick = () => setShowDialog(true);
+    async function handleJoinClick() {
+        if (room.private) {
+            setShowDialog(true);
+        } else {
+            await joinRoom();
+        }
+    }
 
-    const handleConfirmJoin = () => {
-        console.log("Joining room", room.id, "with password", password);
-        setShowDialog(false);
-        setPassword("");
-    };
+    async function joinRoom() {
+        const res = await authFetch("/api/join-room", {
+            method: "POST",
+            body: JSON.stringify({
+                "room_id": room.id,
+                "password": password,
+            })
+        });
+        if (res.ok) {
+            setShowDialog(false);
+            setPassword("");
+            navigate(`/room/${room.id}`, { replace: true })
+        }
+        if (res.status == 401) {
+            alert("wrong room password")
+        }
+    }
 
     return (
         <>
@@ -35,8 +56,8 @@ function RoomCard({ room }) {
                 <JoinRoomDialog
                     room={room}
                     onClose={() => setShowDialog(false)}
-                    onConfirm={handleConfirmJoin}
-                    setPassword={setPassword} // pass setter for password input
+                    onConfirm={{joinRoom, setPassword}}
+                    setPassword={setPassword}
                 />
             )}
         </>

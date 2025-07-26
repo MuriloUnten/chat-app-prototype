@@ -30,7 +30,6 @@ function CreateRoom() {
                 })
             });
             if (joinResponse.ok) {
-                console.log("room joined. Must navigate to it")
                 navigate(`/room/${data.room.id}`, { replace: true })
             }
             else {

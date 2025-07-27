@@ -5,17 +5,34 @@ import { authFetch, fetchJSON, RequireAuth } from "../util.js"
 
 function Room() {
     const { roomId } = useParams();
+    const [roomName, setRoomName] = useState("");
+    // TODO add members array and display them on the page
+
     const [message, setMessage] = useState("");
 
-    const handleSendMessage = () => {
-        // this is where you'll send messages later
+    function handleSendMessage() {
         console.log("Send:", message);
         setMessage("");
-    };
+    }
+
+    useEffect(() => {
+        async function loadRoom() {
+            const res = await fetch(`/api/room/${roomId}`);
+            if (!res.ok) {
+                console.log("failed to fetch room");
+                return;
+            }
+
+            const data = await res.json();
+            setRoomName(data.name);
+        }
+
+        loadRoom();
+    }, [roomId]);
 
     return (
         <div className="max-w-2xl mx-auto mt-8 flex flex-col h-[90vh]">
-            <h1 className="text-2xl font-bold mb-4">Room #{roomId}</h1>
+            <h1 className="text-2xl font-bold mb-4">{roomName}</h1>
 
             {/* Message display area */}
             <div className="flex-1 overflow-y-auto border rounded p-4 bg-white shadow mb-4">

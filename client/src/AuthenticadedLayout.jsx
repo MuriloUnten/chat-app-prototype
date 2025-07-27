@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
+import RoomSidebar from "./components/RoomSidebar";
 
 function AuthenticatedLayout({ children }) {
     const token = localStorage.getItem("token");
@@ -11,7 +12,12 @@ function AuthenticatedLayout({ children }) {
     return (
         <>
             <Navbar />
-            <div className="p-4">{children}</div>
+            <div className="flex h-screen">
+                <RoomSidebar />
+                <main className="flex-1 p-4 flex justify-center items-start overflow-auto">
+                    <div className="w-full max-w-xl">{children}</div>
+                </main>
+            </div>
         </>
     );
 }

@@ -19,7 +19,7 @@ function Navbar() {
                 <Link to="/dashboard">Dashboard</Link>
             </div>
 
-            <div className="relative w-20 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+            <div className="relative w-20 h-8 rounded bg-red-100 flex items-center justify-center">
                 <button
                     onClick={ handleLogout}
                     className=""

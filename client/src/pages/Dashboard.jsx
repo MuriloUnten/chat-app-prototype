@@ -24,6 +24,11 @@ function Dashboard() {
             <div className="flex-1 p-6 overflow-auto">
                 <div className="max-w-xl mx-auto mt-10 space-y-4">
                     <h1 className="text-2xl font-bold">Dashboard</h1>
+                    <ul className="space-y-2">
+                        {rooms.map((room) => (
+                            <RoomCard key={room.id} room={room} />
+                        ))}
+                    </ul>
                     <div className="flex gap-2">
                         <button
                             className="bg-blue-500 text-white px-4 py-2 rounded"
@@ -35,11 +40,6 @@ function Dashboard() {
                             Refresh
                         </button>
                     </div>
-                    <ul className="space-y-2">
-                        {rooms.map((room) => (
-                            <RoomCard key={room.id} room={room} />
-                        ))}
-                    </ul>
                 </div>
             </div>
         </div>

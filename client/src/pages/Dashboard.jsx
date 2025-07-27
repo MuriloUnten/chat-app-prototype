@@ -20,7 +20,7 @@ function Dashboard() {
     }
 
     return (
-        <div className="flex h-screen">
+        <div className="flex">
             <div className="flex-1 p-6 overflow-auto">
                 <div className="max-w-xl mx-auto mt-10 space-y-4">
                     <h1 className="text-2xl font-bold">Dashboard</h1>

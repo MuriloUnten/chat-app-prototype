@@ -66,6 +66,10 @@ type JoinRoomRequest struct {
 	Password string `json:"password"`
 }
 
+type GetRoomMembersResponse struct {
+	Users []UserOutput `json:"users"`
+}
+
 func (s *Server) handleGetRooms(w http.ResponseWriter, r *http.Request) error {
 	q := `SELECT r.room_id, r.name, r.private, r.owner_id FROM room r`
 
@@ -107,6 +111,47 @@ func (s *Server) handleGetRoomById(w http.ResponseWriter, r *http.Request) error
 	}
 
 	return writeJSON(w, http.StatusOK, room)
+}
+
+func (s *Server) handleGetRoomMembers(w http.ResponseWriter, r *http.Request) error {
+	userId, err := getIdFromToken(r)
+	if err != nil {
+		return UserNotAuthenticated()
+	}
+
+	roomId, err := getPathId("roomId", r)
+	if err != nil {
+		return BadRequest()
+	}
+
+	q := `SELECT 1 FROM room_user WHERE room_id = $1 AND user_id = $2`
+	row := s.db.QueryRow(context.Background(), q, roomId, userId)
+	if err = row.Scan(nil); err == nil {
+		return BadRequest() // either room doesnt exist or user is not a member of it
+	}
+
+	q = `
+	SELECT u.user_id, u.name FROM app_user u
+	JOIN room_user ru ON u.user_id = ru.user_id
+	WHERE ru.room_id = $1
+	`
+	rows, err := s.db.Query(context.Background(), q, roomId)
+	if err != nil {
+		return err
+	}
+
+	users := make([]UserOutput, 0)
+	for rows.Next() {
+		var user UserOutput
+		err := rows.Scan(&user.Id, &user.Name)
+		if err != nil {
+			return err
+		}
+		users = append(users, user)
+	}
+
+	res := GetRoomMembersResponse{Users: users}
+	return writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) error {

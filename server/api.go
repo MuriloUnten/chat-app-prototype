@@ -138,12 +138,14 @@ func NewServer(port string) *Server {
 
 	http.HandleFunc("GET /api/room", makeHandler(s.handleGetRooms))
 	http.HandleFunc("GET /api/room/{id}", makeHandler(s.handleGetRoomById))
+	http.HandleFunc("GET /api/room/{roomId}/users", makeHandler(jwtMiddleware(s.handleGetRoomMembers)))
 	http.HandleFunc("POST /api/room", makeHandler(jwtMiddleware(s.handleCreateRoom)))
 	http.HandleFunc("POST /api/join-room", makeHandler(jwtMiddleware(s.handleJoinRoom)))
 	http.HandleFunc("DELETE /api/delete-room", makeHandler(jwtMiddleware(s.handleDeleteRoom)))
 
 	http.HandleFunc("POST /api/user", makeHandler(s.handleCreateUser))
 	http.HandleFunc("GET /api/user/{userId}", makeHandler(s.handleGetUserById))
+	http.HandleFunc("GET /api/user/rooms", makeHandler(jwtMiddleware(s.handleGetJoinedRoomsByUserId)))
 	http.HandleFunc("DELETE /api/user", makeHandler(jwtMiddleware(s.handleDeleteUser)))
 
 	http.HandleFunc("POST /api/login", makeHandler(s.handleUserLogin))

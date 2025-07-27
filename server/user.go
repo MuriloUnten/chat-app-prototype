@@ -39,6 +39,10 @@ type UserLoginResponse struct {
 	Token string `json:"token"`
 }
 
+type GetJoinedRoomsByUserIdResponse struct {
+	Rooms []RoomOutput `json:"rooms"`
+}
+
 func (r CreateUserRequest) validate() map[string]string {
 	errs := make(map[string]string)
 	if len(r.User.Name) < 3 {
@@ -155,6 +159,36 @@ func (s *Server) handleGetUserById(w http.ResponseWriter, r *http.Request) error
 	}
 
 	return writeJSON(w, http.StatusOK, u)
+}
+
+func (s *Server) handleGetJoinedRoomsByUserId(w http.ResponseWriter, r *http.Request) error {
+	userId, err := getIdFromToken(r)
+	if err != nil {
+		return UserNotAuthenticated()
+	}
+
+	q := `
+	SELECT r.room_id, r.name, r.private, r.owner_id FROM room r
+	JOIN room_user ru ON r.room_id = ru.room_id
+	WHERE ru.user_id = $1
+	`
+	rows, err := s.db.Query(context.Background(), q, userId)
+	if err != nil {
+		return err
+	}
+
+	rooms := make([]RoomOutput, 0)
+	for rows.Next() {
+		var room RoomOutput
+		err = rows.Scan(&room.Id, &room.Name, &room.Private, &room.OwnerId)
+		if err != nil {
+			return err
+		}
+		rooms = append(rooms, room)
+	}
+
+	res := GetJoinedRoomsByUserIdResponse{Rooms: rooms}
+	return writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {

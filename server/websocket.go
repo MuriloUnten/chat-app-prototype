@@ -55,8 +55,8 @@ type ChatMsg struct {
 
 type EventMsg struct {
 	Event  EventType `json:"event"`
-	UserId int       `json:"userId"`
-	RoomId int       `json:"roomId"`
+	UserId int       `json:"user_id"`
+	RoomId int       `json:"room_id"`
 }
 
 type ErrorMsg struct {

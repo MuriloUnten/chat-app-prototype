@@ -21,6 +21,7 @@ function RegisterForm() {
         if (res.ok) {
             const data = await res.json()
             localStorage.setItem("token", data.token)
+            navigate("/", { replace: true })
         } else {
             alert("Registration failed");
         }

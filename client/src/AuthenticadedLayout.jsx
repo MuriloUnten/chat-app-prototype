@@ -1,12 +1,15 @@
 import { Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import RoomSidebar from "./components/RoomSidebar";
+import { useWebSocketConnection } from "./websocket";
 
 function AuthenticatedLayout({ children }) {
     const token = localStorage.getItem("token");
 
+    useWebSocketConnection();
+
     if (!token) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/login" replace/>
     }
 
     return (

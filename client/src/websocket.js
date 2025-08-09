@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import useChatStore from "./store";
+import useWebSocket, { ReadyState } from "react-use-websocket"
 
 const MsgType = Object.freeze({
     Chat: "chat",
@@ -15,32 +16,53 @@ const EventType = Object.freeze({
 });
 
 export function useWebSocketConnection() {
+    const token = localStorage.getItem("token");
+    const WS_URL = "ws://127.0.0.1:8080/api/ws";
+    const { sendJsonMessage, lastJsonMessage, readyState } = useWebSocket(
+        WS_URL,
+        {
+            share: false,
+            shouldReconnect: (e) => {
+                console.log(e);
+                return true
+            },
+            protocols: [token]
+        },
+    );
+
+    const connectionStatus = {
+        [ReadyState.CONNECTING]: 'Connecting',
+        [ReadyState.OPEN]: 'Open',
+        [ReadyState.CLOSING]: 'Closing',
+        [ReadyState.CLOSED]: 'Closed',
+        [ReadyState.UNINSTANTIATED]: 'Uninstantiated',
+    }[readyState];
+
     useEffect(() => {
-        const ws = WebSocket("/api/ws");
+        console.log("Connection state changed to", connectionStatus);
+    }, [readyState]);
 
-        ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            const { type, data } = msg;
-
-            handleMsg(type, data);
-        };
-
-        
-        return () => {
-            ws.close();
-        };
-    }, []);
+    useEffect(() => {
+        console.log("Got a new message:");
+        console.log(lastJsonMessage);
+        if (lastJsonMessage != null) {
+            handleMsg(lastJsonMessage.type, lastJsonMessage.data);
+        }
+    }, [lastJsonMessage]);
 }
 
-function handleMsg(type, data) {
+export function handleMsg(type, data) {
     try {
         switch (type) {
             case MsgType.Chat:
                 handleChatMsg(data);
+                break;
             case MsgType.Event:
                 handleEventMsg(data);
+                break;
             case MsgType.Error:
                 handleErrorMsg(data);
+                break;
 
             default:
                 console.log("received fucked message");
@@ -56,7 +78,7 @@ function handleMsg(type, data) {
 function handleChatMsg(data) {
     validateChatMsg(data);
 
-    const { addMessage } = useChatStore();
+    const { addMessageToRoom } = useChatStore.getState();
 
     const msg = {
         senderId: data.sender.id,
@@ -64,23 +86,30 @@ function handleChatMsg(data) {
         content: data.content,
     };
 
-    addMessage(data.room_id, msg);
+    addMessageToRoom(data.room_id, msg);
 }
 
 function handleEventMsg(data) {
     validateEventMsg(data);
 
-    const { addRoom, deleteRoom } = useChatStore();
+    const { addMember, removeMember, addAvailableRoom, deleteRoom } = useChatStore.getState();
 
     switch (data.event) {
         case EventType.UserJoined:
+            addMember(data.room_id, data.member)
+            break;
 
         case EventType.UserLeft:
+            removeMember(data.room_id, data.user_id);
+            break;
 
         case EventType.RoomCreated:
-            addRoom(data.room_id);
-        case EventType.RoomDeleted:
+            addAvailableRoom(data.room_id);
+            break;
 
+        case EventType.RoomDeleted:
+            deleteRoom(data.room_id);
+            break;
         default:
             throw new Error(`Invalid event type ${data.event}`);
     }
@@ -88,6 +117,7 @@ function handleEventMsg(data) {
 
 function handleErrorMsg(data) {
     validateErrorMsg(data);
+    console.log("error message:", data.error);
 }
 
 function validateChatMsg(data) {
@@ -103,7 +133,7 @@ function validateChatMsg(data) {
     if (!data.sender.name) {
         throw new Error("Missing user name");
     }
-    if (!data.content) {
+    if (!data.text) {
         throw new Error("Missing content");
     }
 }

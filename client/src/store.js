@@ -6,6 +6,11 @@ const useChatStore = create((set, get) => ({
 
     setAvailableRooms: (rooms) => set({ availableRooms: rooms }),
 
+    addAvailableRoom: (roomId) => {
+        const current = get().availableRooms;
+        set({ availableRooms: [...current, roomId]});
+    },
+
     joinRoom: (roomId) => {
         const current = get().joinedRooms;
         if (current[roomId]) {
@@ -57,14 +62,14 @@ const useChatStore = create((set, get) => ({
         });
     },
 
-    addMember: (roomId, member) => {
+    addMember: (roomId, memberId) => {
         const current = get().joinedRooms;
         const room = current[roomId];
         if (!room) {
             return;
         }
 
-        const alreadyIn = room.members.find((m) => m.id === member.id);
+        const alreadyIn = room.members.find((m) => m === memberId);
         if (alreadyIn) {
             return;
         }
@@ -75,7 +80,7 @@ const useChatStore = create((set, get) => ({
                 [roomId]: {
                     ...room,
                     messages: room.messages,
-                    members: [...room.members, member],
+                    members: [...room.members, memberId],
                 }
             }
         });
@@ -88,7 +93,7 @@ const useChatStore = create((set, get) => ({
             return;
         }
 
-        const alreadyIn = room.members.find(m => m.id === memberId);
+        const alreadyIn = room.members.find(m => m === memberId);
         if (!alreadyIn) {
             return;
         }
@@ -98,7 +103,7 @@ const useChatStore = create((set, get) => ({
                 ...current,
                 [roomId]: {
                     messages: room.messages,
-                    members: room.members.filter((m) => m.id !== memberId),
+                    members: room.members.filter((m) => m !== memberId),
                 },
             },
         });
@@ -123,3 +128,5 @@ const useChatStore = create((set, get) => ({
         });
     }
 }));
+
+export default useChatStore;

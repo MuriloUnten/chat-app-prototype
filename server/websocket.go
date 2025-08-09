@@ -25,6 +25,9 @@ const (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize: websocketBufferSize,
 	WriteBufferSize: websocketBufferSize,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
 }
 
 type MsgType string
@@ -345,8 +348,12 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	token := r.Header.Get("Sec-Websocket-Protocol")
+	localUpgrader := upgrader
+	localUpgrader.Subprotocols = []string{token}
+	conn, err := localUpgrader.Upgrade(w, r, nil)
 	if err != nil {
+		fmt.Println("failed to upgrade websocket connection\n", err)
 		// must return nil here because upgrader.Upgrade() will have already written the response on error
 		// This avoids appending to the response
 		return nil

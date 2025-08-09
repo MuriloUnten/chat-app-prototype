@@ -50,12 +50,20 @@ type CustomClaims struct {
 
 func jwtMiddleware(handler APIFunc) APIFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
+		var tokenString string
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		if authHeader != "" && !strings.HasPrefix(authHeader, "Bearer ") {
 			return writeJSON(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
 		}
+		tokenString = strings.TrimPrefix(authHeader, "Bearer ")
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		// TODO refactor this (workaround for receiving token from ws request)
+		if authHeader == "" {
+			tokenString = r.Header.Get("Sec-WebSocket-Protocol")
+			if tokenString == "" {
+				return writeJSON(w, http.StatusUnauthorized, "Missing or invalid Authorization header")
+			}
+		}
 
 		token, err := jwt.ParseWithClaims(tokenString, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -106,7 +114,6 @@ func writeJSON(w http.ResponseWriter, status int, data any) error {
 	w.WriteHeader(status)
 	return json.NewEncoder(w).Encode(data)
 }
-
 
 func getPathId(wildcard string, r *http.Request) (int, error) {
 	v := r.PathValue(wildcard)
